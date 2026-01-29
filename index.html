@@ -3,361 +3,537 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegram Tasdiqlash</title>
+    <title>Telegram Bot Tasdiqlash</title>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-
+        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1a2980 0%, #26d0ce 100%);
             min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            width: 100%;
+            max-width: 500px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+        }
+        
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 28px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            color: #7f8c8d;
+            margin-bottom: 30px;
+            text-align: center;
+            line-height: 1.6;
+        }
+        
+        .steps {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            margin: 25px 0;
+        }
+        
+        .step {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 10px;
+            border-left: 4px solid #3498db;
+        }
+        
+        .step-number {
+            background: #3498db;
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            font-weight: bold;
+            margin-right: 15px;
+            flex-shrink: 0;
         }
-
-        .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            padding: 40px;
-            max-width: 450px;
-            width: 100%;
-            animation: slideUp 0.5s ease;
+        
+        .step-content h3 {
+            color: #2c3e50;
+            margin-bottom: 5px;
         }
-
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+        
+        .step-content p {
+            color: #7f8c8d;
+            font-size: 14px;
         }
-
-        .logo {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        .logo-icon {
-            width: 80px;
-            height: 80px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 20px;
+        
+        .bot-link {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 40px;
-            margin-bottom: 15px;
-        }
-
-        h1 {
-            color: #2d3748;
-            font-size: 28px;
-            margin-bottom: 10px;
-            text-align: center;
-        }
-
-        .subtitle {
-            color: #718096;
-            text-align: center;
-            margin-bottom: 30px;
-            line-height: 1.6;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        label {
-            display: block;
-            color: #4a5568;
+            background: linear-gradient(135deg, #3498db 0%, #2ecc71 100%);
+            color: white;
+            text-decoration: none;
+            padding: 15px 30px;
+            border-radius: 50px;
             font-weight: 600;
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-
-        input {
-            width: 100%;
-            padding: 14px;
-            border: 2px solid #e2e8f0;
-            border-radius: 10px;
             font-size: 16px;
-            transition: all 0.3s;
-            font-family: monospace;
-        }
-
-        input:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        button {
+            margin: 15px 0;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
             width: 100%;
-            padding: 16px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .bot-link:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(52, 152, 219, 0.3);
+        }
+        
+        .bot-link i {
+            margin-right: 10px;
+            font-size: 20px;
+        }
+        
+        .code-section {
+            margin: 25px 0;
+        }
+        
+        .code-input {
+            width: 100%;
+            padding: 18px;
+            border: 2px solid #ddd;
+            border-radius: 12px;
+            font-size: 20px;
+            text-align: center;
+            letter-spacing: 15px;
+            font-weight: bold;
+            color: #2c3e50;
+            background: #f8f9fa;
+            transition: all 0.3s ease;
+        }
+        
+        .code-input:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+            background: white;
+        }
+        
+        .verify-btn {
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
             color: white;
             border: none;
-            border-radius: 10px;
-            font-size: 16px;
+            border-radius: 12px;
+            font-size: 18px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s ease;
             margin-top: 10px;
         }
-
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        
+        .verify-btn:hover:not(:disabled) {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(46, 204, 113, 0.3);
         }
-
-        button:active {
-            transform: translateY(0);
-        }
-
-        button:disabled {
-            background: #cbd5e0;
+        
+        .verify-btn:disabled {
+            opacity: 0.6;
             cursor: not-allowed;
-            transform: none;
         }
-
-        .message {
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            animation: slideDown 0.3s ease;
-        }
-
-        @keyframes slideDown {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .message.error {
-            background: #fed7d7;
-            color: #c53030;
-            border-left: 4px solid #c53030;
-        }
-
-        .message.success {
-            background: #c6f6d5;
-            color: #22543d;
-            border-left: 4px solid #22543d;
-        }
-
-        .instructions {
-            background: #ebf8ff;
-            padding: 20px;
-            border-radius: 10px;
-            margin-top: 25px;
-            border-left: 4px solid #3182ce;
-        }
-
-        .instructions h3 {
-            color: #2c5282;
-            font-size: 16px;
-            margin-bottom: 12px;
-        }
-
-        .instructions ol {
-            color: #2d3748;
-            padding-left: 20px;
-            line-height: 1.8;
-        }
-
-        .instructions li {
-            margin-bottom: 8px;
-        }
-
-        .telegram-link {
-            display: inline-block;
-            color: #667eea;
-            text-decoration: none;
-            font-weight: 600;
-            margin-top: 15px;
-            transition: color 0.3s;
-        }
-
-        .telegram-link:hover {
-            color: #764ba2;
-        }
-
-        .loading {
-            display: none;
+        
+        .timer {
             text-align: center;
-            margin-top: 10px;
+            color: #e74c3c;
+            font-weight: 600;
+            margin: 10px 0;
+            font-size: 14px;
         }
-
-        .loading.active {
-            display: block;
+        
+        .alert {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            display: none;
+            animation: slideIn 0.3s ease;
         }
-
-        .spinner {
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .status-panel {
+            background: #2c3e50;
+            color: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 25px;
+            font-size: 14px;
+        }
+        
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .status-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        
+        .status-value {
+            font-weight: 600;
+        }
+        
+        .connected {
+            color: #2ecc71;
+        }
+        
+        .disconnected {
+            color: #e74c3c;
+        }
+        
+        .loader {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
             border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
+            border-top: 3px solid #3498db;
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
             animation: spin 1s linear infinite;
-            margin: 0 auto;
+            margin-right: 10px;
         }
-
+        
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        .firebase-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+        
+        .firebase-connected {
+            color: #27ae60;
+        }
+        
+        .firebase-disconnected {
+            color: #e74c3c;
+        }
+        
+        @media (max-width: 600px) {
+            .container {
+                padding: 25px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            .code-input {
+                font-size: 18px;
+                letter-spacing: 10px;
+                padding: 15px;
+            }
+        }
     </style>
 </head>
 <body>
+    <div class="firebase-status" id="firebaseStatus"></div>
+    
     <div class="container">
-        <div class="logo">
-            <div class="logo-icon">🔐</div>
-        </div>
+        <h1>🤖 Telegram Bot Tasdiqlash</h1>
+        <p class="subtitle">Bot orqali olingan kodni kiriting va Firebase realtime database ga kirish huquqini oling</p>
         
-        <h1>Telegram Tasdiqlash</h1>
-        <p class="subtitle">Davom etish uchun Telegram orqali tasdiqlang</p>
-        
-        <div id="messageBox"></div>
-        
-        <form id="verifyForm">
-            <div class="form-group">
-                <label for="user_id">Telegram ID</label>
-                <input 
-                    type="text" 
-                    id="user_id" 
-                    name="user_id" 
-                    placeholder="123456789"
-                    required
-                    pattern="[0-9]+"
-                    title="Faqat raqamlar kiriting"
-                >
+        <div class="steps">
+            <div class="step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <h3>Botga o'ting</h3>
+                    <p>Quyidagi tugma orqali Telegram botimizga o'ting</p>
+                </div>
             </div>
             
-            <div class="form-group">
-                <label for="code">Tasdiqlash Kodi</label>
-                <input 
-                    type="text" 
-                    id="code" 
-                    name="code" 
-                    placeholder="1234"
-                    required
-                    pattern="[0-9]{4}"
-                    maxlength="4"
-                    title="4 xonali kod kiriting"
-                >
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <h3>Kod oling</h3>
+                    <p>Botda <code>/start</code> buyrug'ini yuboring va 4 raqamli kod oling</p>
+                </div>
             </div>
             
-            <button type="submit" id="submitBtn">Tasdiqlash</button>
-        </form>
-
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <h3>Kodni kiriting</h3>
+                    <p>Olingan kodni pastdagi maydonga kiriting</p>
+                </div>
+            </div>
         </div>
         
-        <div class="instructions">
-            <h3>📱 Qanday qilib tasdiqlash kerak?</h3>
-            <ol>
-                <li>Telegram botimizga o'ting</li>
-                <li><code>/start</code> buyrug'ini yuboring</li>
-                <li>Sizga 4 raqamli kod va Telegram ID yuboriladi</li>
-                <li>Ularni yuqoridagi maydonga kiriting</li>
-                <li>Kod 1 daqiqa davomida amal qiladi</li>
-            </ol>
-            <a href="https://t.me/YOUR_BOT_USERNAME" target="_blank" class="telegram-link">
-                🚀 Botga o'tish →
-            </a>
+        <button id="openBotBtn" class="bot-link">
+            <span style="font-size: 20px;">🤖</span>
+            <span style="margin-left: 10px;">Telegram Botga O'tish</span>
+        </button>
+        
+        <div class="code-section">
+            <input type="text" 
+                   id="codeInput" 
+                   class="code-input" 
+                   placeholder="0000" 
+                   maxlength="4"
+                   pattern="\d{4}"
+                   inputmode="numeric"
+                   autocomplete="off">
+            
+            <div class="timer" id="timer">Kod 5 daqiqa amal qiladi</div>
+            
+            <div id="alertBox" class="alert"></div>
+            
+            <button id="verifyBtn" class="verify-btn">
+                <span id="btnText">✅ Tasdiqlash va Firebase ga Kirish</span>
+            </button>
+        </div>
+        
+        <div class="status-panel">
+            <div class="status-item">
+                <span>Firebase Holati:</span>
+                <span id="fbStatus" class="status-value">Tekshirilmoqda...</span>
+            </div>
         </div>
     </div>
 
+    <!-- Firebase Configuration -->
     <script>
-        const form = document.getElementById('verifyForm');
-        const messageBox = document.getElementById('messageBox');
-        const submitBtn = document.getElementById('submitBtn');
-        const loading = document.getElementById('loading');
+        // Firebase konfiguratsiyasi - O'zingizning project ma'lumotlaringizni qo'ying
+        const firebaseConfig = {
+            apiKey: "AIzaSyDTO6YMagcWFbaCyABLJmckPuTMeqLlimA",
+            authDomain: "claude-sayt-verify-bot.firebaseapp.com",
+            databaseURL: "https://claude-sayt-verify-bot-default-rtdb.firebaseio.com",
+            projectId: "claude-sayt-verify-bot",
+            storageBucket: "claude-sayt-verify-bot.firebasestorage.app",
+            messagingSenderId: "597735252930",
+            appId: "1:597735252930:web:98a01f74d98a6731b6ac5b"
+        };
 
-        function showMessage(message, type) {
-            messageBox.innerHTML = `<div class="message ${type}">${message}</div>`;
-            setTimeout(() => {
-                if (type !== 'success') {
-                    messageBox.innerHTML = '';
+        // Firebase ni ishga tushirish
+        const app = firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const auth = firebase.auth();
+
+        // Firebase connection monitoring
+        const connectedRef = database.ref(".info/connected");
+        connectedRef.on("value", (snap) => {
+            const statusDiv = document.getElementById('firebaseStatus');
+            const fbStatusSpan = document.getElementById('fbStatus');
+            
+            if (snap.val() === true) {
+                statusDiv.textContent = "✅ Firebase ga ulanildi";
+                statusDiv.className = "firebase-status firebase-connected";
+                statusDiv.style.display = 'block';
+                fbStatusSpan.textContent = "✅ Ulanilgan";
+                fbStatusSpan.className = "status-value connected";
+            } else {
+                statusDiv.textContent = "❌ Firebase ulanilmadi";
+                statusDiv.className = "firebase-status firebase-disconnected";
+                statusDiv.style.display = 'block';
+                fbStatusSpan.textContent = "❌ Ulanilmagan";
+                fbStatusSpan.className = "status-value disconnected";
+            }
+        });
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const codeInput = document.getElementById('codeInput');
+            const verifyBtn = document.getElementById('verifyBtn');
+            const alertBox = document.getElementById('alertBox');
+            const btnText = document.getElementById('btnText');
+            const openBotBtn = document.getElementById('openBotBtn');
+            
+            // Telegram bot link (o'z bot username ingizni qo'ying)
+            const BOT_USERNAME = "YOUR_BOT_USERNAME";
+            
+            // Botga o'tish tugmasi
+            openBotBtn.addEventListener('click', function() {
+                window.open(`https://t.me/${BOT_USERNAME}`, '_blank');
+            });
+            
+            // Kod input formati
+            codeInput.addEventListener('input', function(e) {
+                let value = e.target.value.replace(/\D/g, '');
+                if (value.length > 4) value = value.slice(0, 4);
+                e.target.value = value;
+                
+                // Avtomatik verify agar 4 ta raqam bo'lsa
+                if (value.length === 4) {
+                    verifyCode();
                 }
-            }, 5000);
-        }
-
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
+            });
             
-            const userId = document.getElementById('user_id').value.trim();
-            const code = document.getElementById('code').value.trim();
+            // Verify tugmasi
+            verifyBtn.addEventListener('click', verifyCode);
             
-            if (!userId || !code) {
-                showMessage('❌ Barcha maydonlarni to\'ldiring', 'error');
-                return;
-            }
-
-            if (code.length !== 4) {
-                showMessage('❌ Kod 4 raqamdan iborat bo\'lishi kerak', 'error');
-                return;
-            }
+            // Enter tugmasi bilan verify
+            codeInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && codeInput.value.length === 4) {
+                    verifyCode();
+                }
+            });
             
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Tekshirilmoqda...';
-            loading.classList.add('active');
-            messageBox.innerHTML = '';
-            
-            try {
-                const response = await fetch('/verify', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ user_id: userId, code: code })
-                });
+            function showAlert(message, type = 'info') {
+                alertBox.textContent = message;
+                alertBox.className = `alert alert-${type}`;
+                alertBox.style.display = 'block';
                 
-                const data = await response.json();
-                
-                if (data.success) {
-                    showMessage('✅ ' + data.message, 'success');
+                // Auto hide for success messages
+                if (type === 'success') {
                     setTimeout(() => {
-                        window.location.href = data.redirect;
-                    }, 1000);
-                } else {
-                    showMessage('❌ ' + data.message, 'error');
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = 'Tasdiqlash';
+                        alertBox.style.display = 'none';
+                    }, 5000);
                 }
-            } catch (error) {
-                showMessage('❌ Xatolik yuz berdi. Qaytadan urinib ko\'ring.', 'error');
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Tasdiqlash';
-            } finally {
-                loading.classList.remove('active');
             }
-        });
+            
+            function setLoading(loading) {
+                if (loading) {
+                    verifyBtn.disabled = true;
+                    btnText.innerHTML = '<div class="loader"></div> Tasdiqlanmoqda...';
+                } else {
+                    verifyBtn.disabled = false;
+                    btnText.textContent = '✅ Tasdiqlash va Firebase ga Kirish';
+                }
+            }
+            
+            async function verifyCode(code) {
+                try {
+                    const response = await fetch('http://localhost:5000/verify', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',  // cookie yuborish uchun
+                        body: JSON.stringify({ code })
+                    });
 
-        // Auto-format code input
-        document.getElementById('code').addEventListener('input', function(e) {
-            this.value = this.value.replace(/[^0-9]/g, '');
-        });
+                    const data = await response.json();
+                    if (data.success) {
+                        alert('✅ ' + data.message);
+                        window.location.href = 'dashboard.html';
+                    } else {
+                        alert('❌ ' + data.message);
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert('Server bilan aloqa xatosi');
+                }
+            }
 
-        document.getElementById('user_id').addEventListener('input', function(e) {
-            this.value = this.value.replace(/[^0-9]/g, '');
+
+            
+            async function writeUserToFirebase(userId, userData) {
+                try {
+                    const userRef = database.ref('verified_users/' + userId);
+                    
+                    const userInfo = {
+                        ...userData,
+                        verified_timestamp: firebase.database.ServerValue.TIMESTAMP,
+                        last_login: new Date().toISOString(),
+                        verification_source: 'telegram_bot',
+                        ip_address: await getIP()
+                    };
+                    
+                    await userRef.set(userInfo);
+                    console.log('User data written to Firebase');
+                    
+                    // Also log to server
+                    await fetch('/firebase-data', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            action: 'write',
+                            path: `verified_users/${userId}`,
+                            data: userInfo
+                        })
+                    });
+                    
+                } catch (error) {
+                    console.error('Firebase write error:', error);
+                }
+            }
+            
+            async function getIP() {
+                try {
+                    const response = await fetch('https://api.ipify.org?format=json');
+                    const data = await response.json();
+                    return data.ip;
+                } catch (error) {
+                    return 'unknown';
+                }
+            }
+            
+            // Auto-focus code input
+            codeInput.focus();
+            
+            // Demo: Auto-fill for testing (productionda olib tashlang)
+            if (window.location.hostname === 'localhost') {
+                console.log('Localhost muhiti - test rejimi');
+                // codeInput.value = '1234'; // Test uchun
+            }
         });
     </script>
 </body>

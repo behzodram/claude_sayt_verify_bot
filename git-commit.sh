@@ -15,6 +15,8 @@ if [ "$BRANCH" = "front" ]; then
     FILE="front_v.txt"
 elif [ "$BRANCH" = "back" ]; then
     FILE="back_v.txt"
+elif [ "$BRANCH" = "main" ]; then
+    FILE="main_v.txt"    
 else
     git commit -m "$MSG"
     exit 0

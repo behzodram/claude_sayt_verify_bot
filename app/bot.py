@@ -1,12 +1,11 @@
 import logging
 import random
 import string
-from datetime import datetime, timedelta
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
-from config import BOT_TOKEN
 import json
-import os
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from config import BOT_TOKEN, REDIS_HOST, REDIS_PORT, REDIS_DB, CODE_EXPIRE_TIME, VERIFICATION_QUEUE
+import redis
 
 # Enable logging
 logging.basicConfig(
@@ -15,86 +14,68 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Simple in-memory storage (Redis alternative)
-verification_codes = {}
+# Redis connection
+try:
+    redis_client = redis.Redis(
+        host=REDIS_HOST,
+        port=REDIS_PORT,
+        db=REDIS_DB,
+        decode_responses=True
+    )
+    redis_client.ping()
+    logger.info("Redis ulanishi muvaffaqiyatli!")
+except Exception as e:
+    logger.error(f"Redis ulanish xatosi: {e}")
+    redis_client = None
 
 def generate_code():
     """Generate 4-digit verification code"""
     return ''.join(random.choices(string.digits, k=4))
 
-def save_verification(user_id, code):
-    """Save verification code with expiration"""
-    expire_time = datetime.now() + timedelta(minutes=1)
-    verification_codes[user_id] = {
-        'code': code,
-        'expires_at': expire_time.isoformat()
-    }
-    # Save to file for persistence across restarts
-    save_verification_data()
-
-def load_verifications():
-    """Load verification codes from file"""
-    if os.path.exists('verification_data.json'):
-        try:
-            with open('verification_data.json', 'r') as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
-
-def get_verification(user_id):
-    """Get verification code if not expired"""
-    if user_id in verification_codes:
-        data = verification_codes[user_id]
-        expire_time = datetime.fromisoformat(data['expires_at'])
-        if datetime.now() < expire_time:
-            return data['code']
-        else:
-            # Code expired, remove it
-            del verification_codes[user_id]
-            save_verification_data()
-    return None
-
-def verify_code(user_id, code):
-    """Verify the code and return user_id if valid"""
-    stored_code = get_verification(user_id)
-    if stored_code and stored_code == code:
-        # Remove used code
-        del verification_codes[user_id]
-        save_verification_data()
-        return user_id
-    return None
-
-def save_verification_data():
-    """Save current verification data to file"""
-    # Clean expired codes first
-    current_time = datetime.now()
-    valid_codes = {
-        k: v for k, v in verification_codes.items()
-        if datetime.fromisoformat(v['expires_at']) > current_time
-    }
-    verification_codes.clear()
-    verification_codes.update(valid_codes)
-    
-    with open('verification_data.json', 'w') as f:
-        json.dump(verification_codes, f)
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command"""
     user = update.effective_user
+    user_id = str(user.id)
+    
+    # Generate 4-digit code
     code = generate_code()
-    save_verification(str(user.id), code)
     
-    logger.info(f"User {user.id} requested verification code: {code}")
+    # Create metadata
+    metadata = {
+        'user_id': user_id,
+        'code': code,
+        'username': user.username or '',
+        'first_name': user.first_name or '',
+        'last_name': user.last_name or ''
+    }
     
-    await update.message.reply_text(
-        f"🔐 *Tasdiqlash kodi*\n\n"
-        f"Sizning kodingiz: `{code}`\n\n"
-        f"⏱ Kod 1 daqiqada amal qiladi.\n"
-        f"📱 Telegram ID: `{user.id}`\n\n"
-        f"Iltimos, saytda ushbu kodni kiriting.",
-        parse_mode='Markdown'
-    )
+    try:
+        # Push metadata to Redis queue (lpush)
+        redis_client.lpush(VERIFICATION_QUEUE, json.dumps(metadata))
+        
+        # Set expiration for the metadata key
+        # Also store in a separate key for tracking
+        key = f"verification:{user_id}"
+        redis_client.setex(key, CODE_EXPIRE_TIME, code)
+        
+        logger.info(f"User {user_id} kod oldi: {code}")
+        
+        await update.message.reply_text(
+            f"🔐 *Tasdiqlash kodi*\n\n"
+            f"Sizning kodingiz: `{code}`\n\n"
+            f"⏱ Kod {CODE_EXPIRE_TIME} soniya amal qiladi.\n"
+            f"📱 Telegram ID: `{user_id}`\n\n"
+            f"✅ Iltimos, saytda faqat kodni kiriting.\n"
+            f"Telegram ID avtomatik aniqlandi!",
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Redis xatosi: {e}")
+        await update.message.reply_text(
+            "❌ Xatolik yuz berdi. Iltimos qaytadan urinib ko'ring.\n"
+            "Agar muammo davom etsa, administratorga murojaat qiling."
+        )
 
 async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /verify command to get new code"""
@@ -110,8 +91,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📝 *Qanday ishlatish:*\n"
         "1. /start buyrug'ini yuboring\n"
         "2. Sizga 4 raqamli kod yuboriladi\n"
-        "3. Kodni saytga kiriting\n"
-        "4. Kod 1 daqiqa amal qiladi"
+        "3. Saytda faqat kodni kiriting (ID kerak emas!)\n"
+        f"4. Kod {CODE_EXPIRE_TIME} soniya amal qiladi"
     )
     await update.message.reply_text(help_text, parse_mode='Markdown')
 
@@ -124,14 +105,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     """Start the bot"""
-    # Load existing verifications
-    global verification_codes
-    verification_codes = load_verifications()
+    if not redis_client:
+        logger.error("Redis ulanmagan! Botni ishga tushirish mumkin emas.")
+        return
     
-    logger.info("Starting bot...")
+    logger.info("Bot ishga tushmoqda...")
     
     # Create application
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
+    application = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .build()
+    )
     
     # Add handlers
     application.add_handler(CommandHandler("start", start))
@@ -140,7 +125,7 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     # Start the bot
-    logger.info("Bot ishga tushdi!")
+    logger.info("Bot ishga tushdi! Redis orqali ishlayapti.")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':

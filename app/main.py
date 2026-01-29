@@ -1,124 +1,217 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
-from datetime import datetime, timedelta
 import json
-import os
-from config import SECRET_KEY
+from config import SECRET_KEY, REDIS_HOST, REDIS_PORT, REDIS_DB, VERIFICATION_QUEUE, CODE_EXPIRE_TIME
 import firebase_admin
 from firebase_admin import credentials, db
+import redis
+import logging
+from datetime import datetime
+
+# Enable logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
-# Initialize Firebase
+# Initialize Firebase (faqat ma'lumot yozish uchun)
 cred = credentials.Certificate("serviceAccountKey.json")
-firebase_admin.initialize_app(cred)
+firebase_admin.initialize_app(cred, {
+    'databaseURL': 'https://claude-sayt-verify-bot-default-rtdb.firebaseio.com'
+})
 
-def load_verifications():
-    """Load verification codes from bot's storage"""
-    if os.path.exists('verification_data.json'):
-        try:
-            with open('verification_data.json', 'r') as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
+# Redis connection (faqat bot bilan aloqa uchun)
+redis_client = redis.Redis(
+    host=REDIS_HOST,
+    port=REDIS_PORT,
+    db=REDIS_DB,
+    decode_responses=True
+)
 
-def verify_code(user_id, code):
-    """Verify the code from user input"""
-    verifications = load_verifications()
-    
-    if user_id in verifications:
-        data = verifications[user_id]
-        expire_time = datetime.fromisoformat(data['expires_at'])
-        
-        # Check if code is valid and not expired
-        if datetime.now() < expire_time and data['code'] == code:
-            # Remove used code
-            del verifications[user_id]
-            with open('verification_data.json', 'w') as f:
-                json.dump(verifications, f)
-            return True
-    return False
 
-def save_user_to_firebase(user_id):
-    """Save verified user to Firebase Realtime Database"""
-    ref = db.reference('verified_users')
-    ref.child(user_id).set({
-        'user_id': user_id,
-        'verified_at': datetime.now().isoformat(),
-        'status': 'active'
-    })
 
-@app.route('/')
-def index():
-    """Main page - check if user is verified"""
-    if 'user_id' in session and session.get('verified'):
-        return redirect(url_for('dashboard'))
-    return render_template('index.html')
+
+from flask_cors import CORS
+
+# GitHub Pages frontend uchun CORS
+CORS(app, origins=["https://username.github.io"], supports_credentials=True)
 
 @app.route('/verify', methods=['POST'])
 def verify():
-    """Verify user with Telegram ID and code"""
-    data = request.get_json()
-    user_id = data.get('user_id', '').strip()
+    data = request.get_json() or {}
     code = data.get('code', '').strip()
-    
-    if not user_id or not code:
-        return jsonify({
-            'success': False,
-            'message': 'Telegram ID va kodni kiriting'
-        }), 400
-    
-    # Verify the code
-    if verify_code(user_id, code):
-        # Save to Firebase
-        try:
-            save_user_to_firebase(user_id)
-            
-            # Set session
-            session['user_id'] = user_id
-            session['verified'] = True
-            session.permanent = True
-            
-            return jsonify({
-                'success': True,
-                'message': 'Tasdiqlash muvaffaqiyatli!',
-                'redirect': url_for('dashboard')
-            })
-        except Exception as e:
-            return jsonify({
-                'success': False,
-                'message': f'Xatolik yuz berdi: {str(e)}'
-            }), 500
-    else:
-        return jsonify({
-            'success': False,
-            'message': 'Noto\'g\'ri kod yoki kod muddati tugagan'
-        }), 401
 
-@app.route('/dashboard')
-def dashboard():
-    """Main dashboard after verification"""
-    if 'user_id' not in session or not session.get('verified'):
-        return redirect(url_for('index'))
-    
-    return render_template('dashboard.html', user_id=session['user_id'])
+    if not code or len(code) != 4 or not code.isdigit():
+        return jsonify(success=False, message='4 xonali kod kiriting'), 400
 
-@app.route('/logout')
-def logout():
-    """Logout user"""
-    session.clear()
-    return redirect(url_for('index'))
+    metadata = pop_verification_from_queue(code)  # Redis’dan olingan
 
-@app.route('/api/check-session')
-def check_session():
-    """Check if user session is valid"""
-    if 'user_id' in session and session.get('verified'):
-        return jsonify({
-            'authenticated': True,
-            'user_id': session['user_id']
+    if not metadata:
+        return jsonify(success=False, message='Noto‘g‘ri yoki eskirgan kod'), 401
+
+    user_id = metadata['user_id']
+    save_user_to_firebase(user_id, metadata)  # Firebase yozish
+
+    session['user_id'] = user_id  # browser bilan bog‘lash
+
+    return jsonify(success=True, message='Tasdiqlash muvaffaqiyatli!')
+
+
+
+
+
+
+
+def get_verification_from_queue(code):
+    """Get verification metadata from Redis queue by code"""
+    try:
+        queue_length = redis_client.llen(VERIFICATION_QUEUE)
+        
+        for _ in range(queue_length):
+            data = redis_client.rpop(VERIFICATION_QUEUE)
+            if data:
+                metadata = json.loads(data)
+                
+                if metadata.get('code') == code:
+                    user_id = metadata.get('user_id')
+                    
+                    # Verify code hasn't expired
+                    key = f"verification:{user_id}"
+                    stored_code = redis_client.get(key)
+                    
+                    if stored_code == code:
+                        redis_client.delete(key)
+                        logger.info(f"Kod tasdiqlandi: {user_id}")
+                        return metadata
+        
+        return None
+    except Exception as e:
+        logger.error(f"Queue xatosi: {e}")
+        return None
+
+def save_user_to_firebase(user_id, metadata):
+    """Save verified user to Firebase Realtime Database"""
+    try:
+        ref = db.reference('verified_users')
+        
+        user_data = {
+            'telegram_id': user_id,
+            'username': metadata.get('username', ''),
+            'first_name': metadata.get('first_name', ''),
+            'last_name': metadata.get('last_name', ''),
+            'verified_at': datetime.now().isoformat(),
+            'last_login': datetime.now().isoformat(),
+            'status': 'active',
+            'verification_method': 'telegram_bot'
+        }
+        
+        # Save user data under telegram_id
+        ref.child(user_id).set(user_data)
+        
+        # Also create a users_by_date reference for analytics
+        date_ref = db.reference(f'users_by_date/{datetime.now().strftime("%Y-%m-%d")}')
+        date_ref.child(user_id).set({
+            'timestamp': datetime.now().isoformat()
         })
-    return jsonify({'authenticated': False}), 401
+        
+        logger.info(f"User Firebase ga saqlandi: {user_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Firebase xatosi: {e}")
+        return False
+
+@app.route('/')
+def index():
+    """Main page - show verification form"""
+    return render_template('index.html')
+
+# @app.route('/verify', methods=['POST'])
+# def verify():
+#     """Verify user with code only"""
+#     data = request.get_json()
+#     code = data.get('code', '').strip()
+    
+#     if not code:
+#         return jsonify({
+#             'success': False,
+#             'message': 'Kodni kiriting'
+#         }), 400
+    
+#     if len(code) != 4 or not code.isdigit():
+#         return jsonify({
+#             'success': False,
+#             'message': '4 xonali kod kiriting'
+#         }), 400
+    
+#     # Get metadata from Redis queue
+#     metadata = get_verification_from_queue(code)
+    
+#     if metadata:
+#         user_id = metadata.get('user_id')
+        
+#         # Save to Firebase
+#         if save_user_to_firebase(user_id, metadata):
+#             return jsonify({
+#                 'success': True,
+#                 'message': 'Tasdiqlash muvaffaqiyatli!',
+#                 'user_id': user_id,
+#                 'user_data': {
+#                     'username': metadata.get('username', ''),
+#                     'first_name': metadata.get('first_name', ''),
+#                     'last_name': metadata.get('last_name', '')
+#                 }
+#             })
+#         else:
+#             return jsonify({
+#                 'success': False,
+#                 'message': 'Firebase xatosi. Qaytadan urinib ko\'ring.'
+#             }), 500
+#     else:
+#         return jsonify({
+#             'success': False,
+#             'message': 'Noto\'g\'ri kod yoki kod muddati tugagan'
+#         }), 401
+
+@app.route('/firebase-data', methods=['POST'])
+def firebase_data():
+    """Handle data operations for Firebase from frontend"""
+    if not request.is_json:
+        return jsonify({'success': False, 'message': 'JSON format expected'}), 400
+    
+    data = request.get_json()
+    action = data.get('action')
+    
+    if action == 'write':
+        # Frontend Firebase dan yozgandan so'ng bu endpoint ga ham yuborishi mumkin
+        # Bu opsiyonel, tracking uchun
+        logger.info(f"Frontend Firebase yozdi: {data.get('path')}")
+        return jsonify({'success': True, 'message': 'Log qabul qilindi'})
+    
+    return jsonify({'success': False, 'message': 'Noto\'g\'ri action'}), 400
+
+@app.route('/api/redis-status')
+def redis_status():
+    """Check Redis connection status"""
+    try:
+        redis_client.ping()
+        queue_length = redis_client.llen(VERIFICATION_QUEUE)
+        return jsonify({
+            'status': 'connected',
+            'queue_length': queue_length
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'disconnected',
+            'error': str(e)
+        }), 500
 
 if __name__ == '__main__':
+    # Test Redis connection
+    try:
+        redis_client.ping()
+        logger.info("Redis ulanishi muvaffaqiyatli! Bot bilan aloqa tayyor.")
+    except Exception as e:
+        logger.error(f"Redis ulanish xatosi: {e}")
+        logger.error("Iltimos Redis serverini ishga tushiring!")
+    
     app.run(debug=True, host='0.0.0.0', port=5000)
