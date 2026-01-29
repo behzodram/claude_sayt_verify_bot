@@ -1,0 +1,13 @@
+[Unit]
+Description=verify_bot Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/behzod/github/Claude_SAYT_verify_bot/app
+ExecStart=/home/ubuntu/behzod/github/Claude_SAYT_verify_bot/venv/bin/python bot.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

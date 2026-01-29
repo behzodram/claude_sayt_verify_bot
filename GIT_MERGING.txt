@@ -1,0 +1,8 @@
+git checkout main
+git pull origin main
+git merge branch_LST_MODIF
+git push origin main
+
+git checkout branch_OLD_MODIF
+git reset --hard main
+git push origin branch_OLD_MODIF--force

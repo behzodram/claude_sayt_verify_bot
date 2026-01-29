@@ -1,0 +1,8 @@
+make.bat
+__pycache__/
+*.pyc
+venv/
+config.py
+run.bat 
+verification_data.json
+serviceAccountKey.json
