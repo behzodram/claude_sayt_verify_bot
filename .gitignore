@@ -5,4 +5,4 @@ venv/
 config.py
 run.bat 
 verification_data.json
-serviceAccountKey.json
+serviceAccountKey.json 

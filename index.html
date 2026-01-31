@@ -461,7 +461,7 @@
             
             async function verifyCode(code) {
                 try {
-                    const response = await fetch('http://localhost:5000/verify', {
+                    const response = await fetch('http://localhost:5501/index.html', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         credentials: 'include',  // cookie yuborish uchun

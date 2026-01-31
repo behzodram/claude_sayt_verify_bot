@@ -1,3 +1,0 @@
-v 1.0.2 => back: nimalardir bo'lib kerdi hammasi chalkash
-v 1.0.1 => back: initial back
-v 1.0.0 => back: initial
